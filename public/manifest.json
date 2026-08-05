@@ -1,0 +1,21 @@
+{
+  "short_name": "Follow Up",
+  "name": "Follow Up - Client Manager",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0A0A0C",
+  "theme_color": "#0A0A0C",
+  "display": "standalone",
+  "orientation": "portrait"
+}

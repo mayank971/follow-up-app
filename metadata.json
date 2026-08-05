@@ -1,0 +1,6 @@
+{
+  "name": "Follow Up",
+  "description": "An iOS-inspired dark mode PWA for managing client follow-ups, meeting schedules, and tasks.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

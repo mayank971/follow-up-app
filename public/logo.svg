@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="120" fill="white"/>
+  <defs>
+    <linearGradient id="gradTop" x1="140" y1="120" x2="380" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+    <linearGradient id="gradMid" x1="180" y1="210" x2="340" y2="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#84CC16"/>
+    </linearGradient>
+    <linearGradient id="gradStem" x1="140" y1="120" x2="220" y2="390" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#047857"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Left Stem -->
+  <path d="M 148 180 C 148 140 180 128 220 128 L 220 350 C 220 375 195 390 172 390 C 152 390 148 370 148 350 Z" fill="url(#gradStem)" />
+
+  <!-- Top Curved Swoop -->
+  <path d="M 180 128 C 220 128 350 128 370 128 C 382 128 388 140 378 152 C 340 195 280 200 220 200 L 180 200 Z" fill="url(#gradTop)" />
+
+  <!-- Middle Leaf Swoop -->
+  <path d="M 180 216 C 240 216 330 216 345 216 C 352 216 355 225 348 232 C 310 270 250 280 180 300 Z" fill="url(#gradMid)" />
+</svg>
