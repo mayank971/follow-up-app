@@ -102,8 +102,9 @@ export function saveSession(user: Profile): AuthSession {
   return session;
 }
 
-export function clearSession(): void {
+export async function clearSession(): Promise<void> {
   activeSession = null;
+  await supabase.auth.signOut();
 }
 
 // ==========================================
@@ -112,44 +113,46 @@ export function clearSession(): void {
 
 export async function loginUser(username: string, password: string): Promise<{ success: boolean; user?: Profile; error?: string }> {
   const cleanUsername = username.trim().toLowerCase();
+  const dummyEmail = `${cleanUsername}@polivector.com`; // Auto-generated for Supabase Auth
 
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .ilike('username', cleanUsername)
-      .maybeSingle();
+    // 1. Authenticate via Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: dummyEmail,
+      password: password,
+    });
 
-    if (error) {
-      console.warn('Supabase profile select error:', error.message);
-    }
-
-    if (data && data.password === password) {
-      saveSession(data);
-      return { success: true, user: data };
-    }
-
-    // Special handling for demo login if user table hasn't been seeded yet
-    if (cleanUsername === 'polivector' && password === 'followup2026') {
-      try {
-        const { data: createdUser } = await supabase
-          .from('profiles')
-          .insert([DEFAULT_DEMO_USER])
-          .select()
-          .single();
-
-        const user = createdUser || DEFAULT_DEMO_USER;
-        // Seed initial sample followups & todos for demo account if empty
-        await seedDemoData(user.id);
-        saveSession(user);
-        return { success: true, user };
-      } catch (e) {
-        saveSession(DEFAULT_DEMO_USER);
-        return { success: true, user: DEFAULT_DEMO_USER };
+    // Special handling for demo login if user hasn't been created yet
+    if (authError && cleanUsername === 'polivector' && password === 'followup2026') {
+      const res = await registerUser('polivector', '9171266305', 'followup2026');
+      if (res.success && res.user) {
+        await seedDemoData(res.user.id);
+        return { success: true, user: res.user };
       }
     }
 
-    return { success: false, error: 'Invalid username or password.' };
+    if (authError) {
+      return { success: false, error: 'Invalid username or password.' };
+    }
+
+    // 2. Fetch the matched profile from the public table
+    if (authData.user) {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileError) {
+        console.warn('Profile sync error:', profileError.message);
+        return { success: false, error: 'User authenticated, but profile data is missing.' };
+      }
+
+      saveSession(profileData as Profile);
+      return { success: true, user: profileData as Profile };
+    }
+
+    return { success: false, error: 'Could not fetch user profile.' };
   } catch (err: any) {
     console.error('Database connection error during login:', err);
     return { success: false, error: 'Could not connect to database server.' };
@@ -159,46 +162,50 @@ export async function loginUser(username: string, password: string): Promise<{ s
 export async function registerUser(username: string, mobileNumber: string, password: string): Promise<{ success: boolean; user?: Profile; error?: string }> {
   const cleanUsername = username.trim().toLowerCase();
   const cleanMobile = mobileNumber.trim();
+  const dummyEmail = `${cleanUsername}@polivector.com`;
 
   if (!cleanUsername || !cleanMobile || !password) {
     return { success: false, error: 'All fields are required.' };
   }
 
   try {
-    // Check if username already exists
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id')
-      .ilike('username', cleanUsername)
-      .maybeSingle();
-
-    if (existing) {
-      return { success: false, error: 'Username is already taken.' };
-    }
-
-    const newProfile: Profile = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'usr_' + Date.now(),
-      username: cleanUsername,
-      mobile_number: cleanMobile,
+    // 1. Create the secure user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: dummyEmail,
       password: password,
-      push_enabled: false,
-      created_at: new Date().toISOString()
-    };
+      options: {
+        data: {
+          username: cleanUsername,
+          mobile_number: cleanMobile,
+        }
+      }
+    });
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert([newProfile])
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Failed to register user in Supabase:', error);
-      return { success: false, error: error.message };
+    if (authError) {
+      if (authError.message.includes('already registered') || authError.message.includes('User already exists')) {
+        return { success: false, error: 'Username is already taken.' };
+      }
+      return { success: false, error: authError.message };
     }
 
-    const registeredUser = data || newProfile;
-    saveSession(registeredUser);
-    return { success: true, user: registeredUser };
+    if (authData.user) {
+      // 2. Wait 500ms to allow the SQL trigger to execute and create the profile
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 3. Fetch the newly triggered profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileData) {
+        saveSession(profileData as Profile);
+        return { success: true, user: profileData as Profile };
+      }
+    }
+
+    return { success: false, error: 'Registration succeeded, but profile sync failed.' };
   } catch (err: any) {
     console.error('Registration error:', err);
     return { success: false, error: err?.message || 'Database registration failure.' };
@@ -206,46 +213,20 @@ export async function registerUser(username: string, mobileNumber: string, passw
 }
 
 export async function retrieveCredentials(username: string, mobileNumber: string): Promise<{ success: boolean; password?: string; error?: string }> {
-  const cleanUsername = username.trim().toLowerCase();
-  const cleanMobile = mobileNumber.trim();
-
-  if (!cleanUsername || !cleanMobile) {
-    return { success: false, error: 'Please enter both Username and Mobile Number.' };
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('password')
-      .ilike('username', cleanUsername)
-      .eq('mobile_number', cleanMobile)
-      .maybeSingle();
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    if (data && data.password) {
-      return { success: true, password: data.password };
-    }
-
-    return { success: false, error: 'No matching account found with these credentials.' };
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Database connection error.' };
-  }
+  // Passwords are now securely encrypted via Supabase Auth and cannot be revealed.
+  return { 
+    success: false, 
+    error: 'For security compliance, passwords are encrypted and cannot be revealed. Please create a new account or contact support.' 
+  };
 }
 
 export async function updatePassword(userId: string, newPassword: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ password: newPassword })
-      .eq('id', userId);
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
 
     if (!error) {
-      if (activeSession && activeSession.user.id === userId) {
-        activeSession.user.password = newPassword;
-      }
       return true;
     }
   } catch (e) {
@@ -278,7 +259,7 @@ export async function deleteAccount(userId: string): Promise<boolean> {
     await supabase.from('followups').delete().eq('user_id', userId);
     await supabase.from('todos').delete().eq('user_id', userId);
     await supabase.from('profiles').delete().eq('id', userId);
-    clearSession();
+    await clearSession();
     return true;
   } catch (e) {
     console.error('Delete account error:', e);
