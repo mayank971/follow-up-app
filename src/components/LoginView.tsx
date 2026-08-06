@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { User, Lock, Phone, Eye, EyeOff, CheckCircle2, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { User, Lock, Phone, Eye, EyeOff, ShieldCheck, ArrowRight, Sparkles, AlertCircle, HelpCircle } from 'lucide-react';
 import { Logo } from './Logo';
-import { loginUser, registerUser, retrieveCredentials } from '../lib/storage';
+import { loginUser, registerUser } from '../lib/storage';
 import { Profile } from '../types';
 
 interface LoginViewProps {
@@ -20,7 +20,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
   // Status states
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [retrievedPassword, setRetrievedPassword] = useState<string | null>(null);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,27 +56,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
       onSuccess(res.user);
     } else {
       setErrorMsg(res.error || 'Registration failed.');
-    }
-  };
-
-  const handleForgotSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setRetrievedPassword(null);
-
-    if (!username.trim() || !mobileNumber.trim()) {
-      setErrorMsg('Please enter both Username and Mobile Number.');
-      return;
-    }
-
-    setLoading(true);
-    const res = await retrieveCredentials(username, mobileNumber);
-    setLoading(false);
-
-    if (res.success && res.password) {
-      setRetrievedPassword(res.password);
-    } else {
-      setErrorMsg(res.error || 'No matching user found.');
     }
   };
 
@@ -120,7 +98,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
               onClick={() => {
                 setMode('login');
                 setErrorMsg('');
-                setRetrievedPassword(null);
               }}
               className={`flex-1 py-2.5 rounded-xl transition-all text-center ${
                 mode === 'login'
@@ -135,7 +112,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
               onClick={() => {
                 setMode('register');
                 setErrorMsg('');
-                setRetrievedPassword(null);
               }}
               className={`flex-1 py-2.5 rounded-xl transition-all text-center ${
                 mode === 'register'
@@ -150,7 +126,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
               onClick={() => {
                 setMode('forgot');
                 setErrorMsg('');
-                setRetrievedPassword(null);
               }}
               className={`flex-1 py-2.5 rounded-xl transition-all text-center ${
                 mode === 'forgot'
@@ -158,7 +133,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              Retrieve
+              Forgot
             </button>
           </div>
 
@@ -268,7 +243,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
                     required
                     value={mobileNumber}
                     onChange={(e) => setMobileNumber(e.target.value)}
-                    placeholder="Mobile number for recovery"
+                    placeholder="Mobile number"
                     className="w-full bg-[#F2F2F7] border border-[#E5E5EA] focus:border-[#007AFF] focus:bg-white text-slate-900 placeholder-slate-400 text-sm rounded-2xl pl-10 pr-4 py-3 outline-none transition-all"
                   />
                 </div>
@@ -302,72 +277,51 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSuccess }) => {
             </form>
           )}
 
-          {/* Mode 3: FORGOT CREDENTIALS */}
+          {/* Mode 3: FORGOT PASSWORD SECURITY NOTICE */}
           {mode === 'forgot' && (
-            <form onSubmit={handleForgotSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Username *
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Enter registered username"
-                    className="w-full bg-[#F2F2F7] border border-[#E5E5EA] focus:border-[#007AFF] focus:bg-white text-slate-900 placeholder-slate-400 text-sm rounded-2xl pl-10 pr-4 py-3 outline-none transition-all"
-                  />
-                </div>
+            <div className="space-y-4 text-center py-2 animate-in fade-in zoom-in-95">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-2">
+                <ShieldCheck className="w-6 h-6" />
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Mobile Number *
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="tel"
-                    required
-                    value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value)}
-                    placeholder="Registered mobile number"
-                    className="w-full bg-[#F2F2F7] border border-[#E5E5EA] focus:border-[#007AFF] focus:bg-white text-slate-900 placeholder-slate-400 text-sm rounded-2xl pl-10 pr-4 py-3 outline-none transition-all"
-                  />
-                </div>
+              <h3 className="text-base font-bold text-slate-900">
+                Password Security Notice
+              </h3>
+
+              <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 text-left space-y-2">
+                <p className="text-xs text-amber-900 font-medium leading-relaxed">
+                  For security compliance, passwords are encrypted. Please contact your system administrator to issue a secure password reset.
+                </p>
+              </div>
+
+              <div className="bg-[#F2F2F7] border border-[#E5E5EA] rounded-2xl p-4 text-left space-y-1 text-xs">
+                <p className="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                  <HelpCircle className="w-3.5 h-3.5 text-[#007AFF]" />
+                  <span>Administrator Support Contact</span>
+                </p>
+                <p className="text-slate-600"><strong>System Admin:</strong> Mayank Patidar</p>
+                <p className="text-slate-600"><strong>Email:</strong> mayank.patidar@polivector.com</p>
+                <p className="text-slate-600"><strong>Help Line:</strong> +91 9171266305</p>
               </div>
 
               <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm py-3.5 px-6 rounded-full shadow-[0_10px_25px_rgba(217,119,6,0.3)] transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => {
+                  setMode('login');
+                  setErrorMsg('');
+                }}
+                className="w-full mt-3 bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-sm py-3 px-6 rounded-full shadow-[0_10px_25px_rgba(0,122,255,0.3)] transition-all active:scale-[0.98]"
               >
-                <span>{loading ? 'Searching...' : 'Reveal Password'}</span>
+                Back to Sign In
               </button>
-
-              {/* Directly Reveal Password */}
-              {retrievedPassword && (
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-1.5 animate-in fade-in">
-                  <div className="flex items-center justify-center gap-1.5 text-emerald-700 font-bold text-xs">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Match Found!</span>
-                  </div>
-                  <p className="text-[11px] text-slate-600">Your Account Password is:</p>
-                  <div className="bg-white border border-emerald-300 text-emerald-700 font-mono text-lg font-extrabold py-2 px-4 rounded-xl inline-block shadow-sm tracking-wider">
-                    {retrievedPassword}
-                  </div>
-                </div>
-              )}
-            </form>
+            </div>
           )}
 
         </div>
 
       </div>
 
-      {/* Bottom Middle Footer as explicitly requested */}
+      {/* Bottom Footer */}
       <footer className="w-full text-center mt-8 pb-2">
         <p className="text-[11px] text-[#8E8E93] font-medium tracking-widest uppercase">
           created by Polivector
