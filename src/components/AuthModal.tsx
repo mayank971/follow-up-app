@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { KeyRound, Lock, User, Phone, ArrowLeft, Eye, EyeOff, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Lock, User, Phone, ArrowLeft, Eye, EyeOff, ShieldCheck, AlertCircle, HelpCircle } from 'lucide-react';
 import { Profile } from '../types';
-import { loginUser, registerUser, retrieveCredentials } from '../lib/storage';
+import { loginUser, registerUser } from '../lib/storage';
 
 interface AuthModalProps {
   onSuccess: (user: Profile) => void;
@@ -10,7 +10,9 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess, onCancel, initialView = 'login' }) => {
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(initialView);
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(
+    initialView === 'forgot-credentials' ? 'forgot' : 'login'
+  );
 
   // Common Fields
   const [username, setUsername] = useState('polivector');
@@ -20,7 +22,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess, onCancel, initi
 
   // Feedback states
   const [errorMsg, setErrorMsg] = useState('');
-  const [retrievedPassword, setRetrievedPassword] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -53,22 +54,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess, onCancel, initi
     }
   };
 
-  const handleForgotSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setRetrievedPassword(null);
-    setLoading(true);
-
-    const res = await retrieveCredentials(username, mobileNumber);
-    setLoading(false);
-
-    if (res.success && res.password) {
-      setRetrievedPassword(res.password);
-    } else {
-      setErrorMsg(res.error || 'No matching account found.');
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 bg-[#0A0A0C]/80 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-[#1C1C1E] border border-[#2C2C2E] rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
@@ -90,14 +75,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess, onCancel, initi
         {/* Title */}
         <div className="text-center">
           <h2 className="text-xl font-bold text-white tracking-tight">
-            {mode === 'login' ? 'Sign In to Follow Up' : mode === 'register' ? 'Create Account' : 'Retrieve Credentials'}
+            {mode === 'login' ? 'Sign In to Follow Up' : mode === 'register' ? 'Create Account' : 'Forgot Password'}
           </h2>
           <p className="text-xs text-[#8E8E93] mt-1">
             {mode === 'login'
               ? 'Enter your credentials below'
               : mode === 'register'
               ? 'Required for credential recovery & cloud sync'
-              : 'Match Username & Mobile Number to reveal password'}
+              : 'Encrypted Credential Security Notice'}
           </p>
         </div>
 
@@ -166,7 +151,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess, onCancel, initi
                 }}
                 className="text-amber-400 hover:underline font-medium"
               >
-                Forgot Credentials?
+                Forgot Password?
               </button>
               <button
                 type="button"
@@ -253,75 +238,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess, onCancel, initi
           </form>
         )}
 
-        {/* Mode 3: FORGOT CREDENTIALS */}
+        {/* Mode 3: FORGOT PASSWORD NOTICE */}
         {mode === 'forgot' && (
-          <form onSubmit={handleForgotSubmit} className="space-y-3.5">
-            <div>
-              <label className="block text-[11px] font-semibold text-[#8E8E93] mb-1">Username *</label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8E8E93]" />
-                <input
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  className="w-full bg-[#0A0A0C] border border-[#2C2C2E] focus:border-[#007AFF] text-white placeholder-[#8E8E93] text-sm rounded-lg pl-9 pr-3 py-2.5 outline-none"
-                />
-              </div>
+          <div className="space-y-4 text-center py-2 animate-in fade-in">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+              <ShieldCheck className="w-5 h-5" />
             </div>
 
-            <div>
-              <label className="block text-[11px] font-semibold text-[#8E8E93] mb-1">Mobile Number *</label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8E8E93]" />
-                <input
-                  type="tel"
-                  required
-                  value={mobileNumber}
-                  onChange={(e) => setMobileNumber(e.target.value)}
-                  placeholder="Registered mobile number"
-                  className="w-full bg-[#0A0A0C] border border-[#2C2C2E] focus:border-[#007AFF] text-white placeholder-[#8E8E93] text-sm rounded-lg pl-9 pr-3 py-2.5 outline-none"
-                />
-              </div>
+            <div className="p-3 bg-amber-950/40 border border-amber-800/40 rounded-xl text-left">
+              <p className="text-xs text-amber-200 font-medium leading-relaxed">
+                For security compliance, passwords are encrypted. Please contact your system administrator to issue a secure password reset.
+              </p>
+            </div>
+
+            <div className="bg-[#0A0A0C] border border-[#2C2C2E] rounded-xl p-3 text-left space-y-1 text-xs text-[#8E8E93]">
+              <p className="font-semibold text-white flex items-center gap-1.5 mb-1">
+                <HelpCircle className="w-3.5 h-3.5 text-[#007AFF]" />
+                <span>Administrator Support</span>
+              </p>
+              <p><strong>System Admin:</strong> Mayank Patidar</p>
+              <p><strong>Email:</strong> mayank.patidar@polivector.com</p>
+              <p><strong>Help Line:</strong> +91 9171266305</p>
             </div>
 
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm py-3 rounded-full shadow-lg transition-all active:scale-[0.98]"
+              type="button"
+              onClick={() => {
+                setMode('login');
+                setErrorMsg('');
+              }}
+              className="w-full bg-white text-[#0A0A0C] hover:bg-[#F2F2F7] font-semibold text-sm py-2.5 rounded-full shadow-lg transition-all active:scale-[0.98]"
             >
-              {loading ? 'Retrieving...' : 'Reveal Account Password'}
+              Back to Sign In
             </button>
-
-            {/* Password Revealed Directly On-Screen */}
-            {retrievedPassword && (
-              <div className="p-4 bg-[#34C759]/10 border border-[#34C759]/30 rounded-xl text-center space-y-1.5 animate-in fade-in zoom-in-95">
-                <div className="flex items-center justify-center gap-1.5 text-[#34C759] font-bold text-xs">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Exact Match Found!</span>
-                </div>
-                <p className="text-[11px] text-[#8E8E93]">Your Account Password is:</p>
-                <div className="bg-[#0A0A0C] border border-[#34C759]/40 text-[#34C759] font-mono text-base font-extrabold py-2 px-4 rounded-lg inline-block tracking-wider selection:bg-[#34C759]/40">
-                  {retrievedPassword}
-                </div>
-              </div>
-            )}
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('login');
-                  setErrorMsg('');
-                  setRetrievedPassword(null);
-                }}
-                className="text-xs text-[#007AFF] hover:underline"
-              >
-                Back to Sign In
-              </button>
-            </div>
-          </form>
+          </div>
         )}
       </div>
     </div>
