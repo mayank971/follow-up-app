@@ -40,11 +40,11 @@ export const ClientDetailView: React.FC<ClientDetailViewProps> = ({
     onBack();
   };
 
-  const handleSaveChanges = async () => {
+const handleSaveChanges = async () => {
     setIsSaving(true);
     const updatedIsoDate = new Date(editDate).toISOString();
     
-    // Save to database
+    // 1. Save to database in the cloud
     await updateFollowup(client.id, {
       client_name: editName,
       followup_date: updatedIsoDate,
@@ -52,8 +52,16 @@ export const ClientDetailView: React.FC<ClientDetailViewProps> = ({
       notes: editNotes
     });
 
-    // Force a smooth app reload so the home screen downloads the fresh data instantly
-    window.location.reload();
+    // 2. Instantly update the local view so we don't have to refresh the page
+    client.client_name = editName;
+    client.followup_date = updatedIsoDate;
+    client.location = editLocation;
+    client.notes = editNotes;
+
+    // 3. Smoothly go back to the home screen without losing the login session!
+    setIsSaving(false);
+    setIsEditing(false);
+    onBack();
   };
 
   const formattedDate = formatFollowupDate(client.followup_date);
