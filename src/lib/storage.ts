@@ -483,3 +483,20 @@ export async function updateTodoOrder(todos: Todo[]): Promise<void> {
     console.error('Error updating todo order:', e);
   }
 }
+export async function updateFollowup(id: string, updatedData: Partial<Followup>): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('followups')
+      .update(updatedData)
+      .eq('id', id);
+
+    if (error) {
+      console.error('Update followup error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('Error updating followup:', e);
+    return false;
+  }
+}
