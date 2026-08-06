@@ -4,8 +4,8 @@ import { supabase } from './supabase';
 // 48 hours in milliseconds
 const SESSION_DURATION_MS = 48 * 60 * 60 * 1000;
 
-// In-memory session tracking (Strictly no localStorage or IndexedDB)
-let activeSession: AuthSession | null = null;
+// Persistent Session Key
+const SESSION_KEY = 'polivector_auth_session';
 
 // Default demo user & initial seed data if table is empty for demo login
 const DEFAULT_DEMO_USER: Profile = {
@@ -78,17 +78,27 @@ const SAMPLE_TODOS: Todo[] = [
 ];
 
 // ==========================================
-// IN-MEMORY SESSION MANAGEMENT (48h Rule)
+// PERSISTENT SESSION MANAGEMENT (48h Rule)
 // ==========================================
 
 export function getStoredSession(): AuthSession | null {
-  if (!activeSession) return null;
-  const now = Date.now();
-  if (now > activeSession.expiresAt || (now - activeSession.loggedInAt) > SESSION_DURATION_MS) {
-    activeSession = null;
+  const stored = localStorage.getItem(SESSION_KEY);
+  if (!stored) return null;
+
+  try {
+    const session: AuthSession = JSON.parse(stored);
+    const now = Date.now();
+    
+    // Check if 48 hours have passed
+    if (now > session.expiresAt || (now - session.loggedInAt) > SESSION_DURATION_MS) {
+      clearSession(); // Silently wipe expired session
+      return null;
+    }
+    return session;
+  } catch (e) {
+    console.error('Session parsing error:', e);
     return null;
   }
-  return activeSession;
 }
 
 export function saveSession(user: Profile): AuthSession {
@@ -98,12 +108,15 @@ export function saveSession(user: Profile): AuthSession {
     loggedInAt: now,
     expiresAt: now + SESSION_DURATION_MS
   };
-  activeSession = session;
+  
+  // Save securely to the device's persistent storage
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   return session;
 }
 
 export async function clearSession(): Promise<void> {
-  activeSession = null;
+  // Wipe from device storage and log out of Supabase
+  localStorage.removeItem(SESSION_KEY);
   await supabase.auth.signOut();
 }
 
@@ -243,8 +256,10 @@ export async function updateProfilePush(userId: string, pushEnabled: boolean): P
       .eq('id', userId);
 
     if (!error) {
-      if (activeSession && activeSession.user.id === userId) {
-        activeSession.user.push_enabled = pushEnabled;
+      const currentSession = getStoredSession();
+      if (currentSession && currentSession.user.id === userId) {
+        currentSession.user.push_enabled = pushEnabled;
+        saveSession(currentSession.user);
       }
       return true;
     }
@@ -483,6 +498,7 @@ export async function updateTodoOrder(todos: Todo[]): Promise<void> {
     console.error('Error updating todo order:', e);
   }
 }
+
 export async function updateFollowup(id: string, updatedData: Partial<Followup>): Promise<boolean> {
   try {
     const { error } = await supabase
