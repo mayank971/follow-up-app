@@ -4,8 +4,8 @@
  * Copyright: 2026 Mayank Patidar
  */
 
-import React, { useState, useEffect } from 'react';
-import { ActiveTab, Followup, Todo, Profile } from './types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ActiveTab, Followup, Todo, Profile, AuthSession } from './types';
 import {
   getStoredSession,
   clearSession,
@@ -37,7 +37,8 @@ import { AuthModal } from './components/AuthModal';
 import { LoginView } from './components/LoginView';
 
 export default function App() {
-  const [session, setSession] = useState(() => getStoredSession());
+  // Check localStorage on mount for active 48-hour persistent session
+  const [session, setSession] = useState<AuthSession | null>(() => getStoredSession());
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [selectedClient, setSelectedClient] = useState<Followup | null>(null);
 
@@ -53,34 +54,52 @@ export default function App() {
     registerServiceWorker();
   }, []);
 
-  // Fetch follow-ups & todos whenever user changes
-  useEffect(() => {
-    async function loadData() {
-      if (!session?.user) return;
-      setLoadingData(true);
-      try {
-        const fData = await getFollowups(session.user.id);
-        setFollowups(fData);
+  // Fresh fetch of user's data from Supabase whenever session updates
+  const loadFreshData = useCallback(async (userId: string, pushEnabled: boolean) => {
+    setLoadingData(true);
+    try {
+      const [fData, tData] = await Promise.all([
+        getFollowups(userId),
+        getTodos(userId)
+      ]);
+      setFollowups(fData);
+      setTodos(tData);
 
-        const tData = await getTodos(session.user.id);
-        setTodos(tData);
-
-        // Check upcoming reminders for notifications
-        checkAndNotifyUpcomingFollowups(fData, session.user.push_enabled);
-      } finally {
-        setLoadingData(false);
-      }
+      // Check upcoming reminders for notifications
+      checkAndNotifyUpcomingFollowups(fData, pushEnabled);
+    } catch (e) {
+      console.error('Error fetching live Supabase data:', e);
+    } finally {
+      setLoadingData(false);
     }
-    loadData();
-  }, [session]);
+  }, []);
+
+  useEffect(() => {
+    if (session?.user) {
+      loadFreshData(session.user.id, session.user.push_enabled);
+    } else {
+      setFollowups([]);
+      setTodos([]);
+    }
+  }, [session, loadFreshData]);
 
   const user = session?.user || null;
 
+  // Login / Session Handler
+  const handleAuthSuccess = (updatedUser?: Profile) => {
+    const currentSession = getStoredSession();
+    setSession(currentSession);
+    setActiveTab('home');
+    if (currentSession?.user) {
+      loadFreshData(currentSession.user.id, currentSession.user.push_enabled);
+    }
+  };
+
   // Handlers
   const handleAddClient = async (data: Omit<Followup, 'id' | 'created_at' | 'is_completed'>) => {
-    const activeUserId = user?.id || 'demo-user-123';
-    await addFollowup({ ...data, user_id: activeUserId });
-    const updated = await getFollowups(activeUserId);
+    if (!user) return;
+    await addFollowup({ ...data, user_id: user.id });
+    const updated = await getFollowups(user.id);
     setFollowups(updated);
     setActiveTab('home');
   };
@@ -88,40 +107,51 @@ export default function App() {
   const handleToggleComplete = async (id: string, currentStatus: boolean, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     await toggleFollowupCompletion(id, currentStatus);
-    const activeUserId = user?.id || 'demo-user-123';
-    const updated = await getFollowups(activeUserId);
-    setFollowups(updated);
+    if (user) {
+      const updated = await getFollowups(user.id);
+      setFollowups(updated);
+    }
   };
 
   const handleDeleteClient = async (id: string) => {
     await deleteFollowup(id);
-    const activeUserId = user?.id || 'demo-user-123';
-    const updated = await getFollowups(activeUserId);
-    setFollowups(updated);
+    if (user) {
+      const updated = await getFollowups(user.id);
+      setFollowups(updated);
+    }
     setSelectedClient(null);
     setActiveTab('home');
   };
 
+  const handleRefreshClientList = async () => {
+    if (user) {
+      const updated = await getFollowups(user.id);
+      setFollowups(updated);
+    }
+  };
+
   // Todo Handlers
   const handleAddTodo = async (taskName: string) => {
-    const activeUserId = user?.id || 'demo-user-123';
-    await addTodo(activeUserId, taskName);
-    const updated = await getTodos(activeUserId);
+    if (!user) return;
+    await addTodo(user.id, taskName);
+    const updated = await getTodos(user.id);
     setTodos(updated);
   };
 
   const handleToggleTodo = async (id: string, currentStatus: boolean) => {
     await toggleTodoCompletion(id, currentStatus);
-    const activeUserId = user?.id || 'demo-user-123';
-    const updated = await getTodos(activeUserId);
-    setTodos(updated);
+    if (user) {
+      const updated = await getTodos(user.id);
+      setTodos(updated);
+    }
   };
 
   const handleDeleteTodo = async (id: string) => {
     await deleteTodo(id);
-    const activeUserId = user?.id || 'demo-user-123';
-    const updated = await getTodos(activeUserId);
-    setTodos(updated);
+    if (user) {
+      const updated = await getTodos(user.id);
+      setTodos(updated);
+    }
   };
 
   const handleReorderTodos = async (newTodos: Todo[]) => {
@@ -158,8 +188,8 @@ export default function App() {
     setActiveTab('home');
   };
 
-  const handleLogout = () => {
-    clearSession();
+  const handleLogout = async () => {
+    await clearSession();
     setSession(null);
     setFollowups([]);
     setTodos([]);
@@ -172,10 +202,7 @@ export default function App() {
       return (
         <AuthModal
           initialView="login"
-          onSuccess={(u) => {
-            setSession(getStoredSession());
-            setActiveTab('home');
-          }}
+          onSuccess={handleAuthSuccess}
           onCancel={() => setActiveTab('home')}
         />
       );
@@ -185,10 +212,7 @@ export default function App() {
       return (
         <AuthModal
           initialView="forgot-credentials"
-          onSuccess={(u) => {
-            setSession(getStoredSession());
-            setActiveTab('home');
-          }}
+          onSuccess={handleAuthSuccess}
           onCancel={() => setActiveTab('home')}
         />
       );
@@ -198,7 +222,7 @@ export default function App() {
       case 'add-client':
         return (
           <AddClientView
-            userId={user?.id || 'demo-user-123'}
+            userId={user?.id || ''}
             onAddClient={handleAddClient}
             onCancel={() => setActiveTab('home')}
           />
@@ -226,6 +250,7 @@ export default function App() {
             onDeleteClient={handleDeleteClient}
             onBack={() => {
               setSelectedClient(null);
+              handleRefreshClientList();
               setActiveTab('home');
             }}
           />
@@ -281,15 +306,11 @@ export default function App() {
     }
   };
 
+  // If no active 48-hour session in localStorage, show Login Screen directly
   if (!session) {
     return (
       <div className="min-h-dvh bg-[#F2F2F7] text-slate-900 flex flex-col antialiased max-w-[500px] mx-auto border-x border-slate-200 relative shadow-2xl overflow-hidden">
-        <LoginView
-          onSuccess={(newUser) => {
-            setSession(getStoredSession());
-            setActiveTab('home');
-          }}
-        />
+        <LoginView onSuccess={handleAuthSuccess} />
       </div>
     );
   }
@@ -314,7 +335,7 @@ export default function App() {
         <AuthModal
           initialView={authModalInitialView}
           onSuccess={(u) => {
-            setSession(getStoredSession());
+            handleAuthSuccess(u);
             setShowAuthModal(false);
           }}
           onCancel={() => setShowAuthModal(false)}
