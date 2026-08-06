@@ -1,10 +1,10 @@
 import { Profile, Followup, Todo, AuthSession } from '../types';
 import { supabase } from './supabase';
 
-// 48 hours in milliseconds
-const SESSION_DURATION_MS = 48 * 60 * 60 * 1000;
+// 48 hours in milliseconds (48 * 60 * 60 * 1000)
+const SESSION_DURATION_MS = 172800000;
 
-// Persistent Session Key
+// Persistent Session Key in localStorage
 const SESSION_KEY = 'polivector_auth_session';
 
 // Default demo user & initial seed data if table is empty for demo login
@@ -82,21 +82,21 @@ const SAMPLE_TODOS: Todo[] = [
 // ==========================================
 
 export function getStoredSession(): AuthSession | null {
-  const stored = localStorage.getItem(SESSION_KEY);
-  if (!stored) return null;
-
   try {
+    const stored = localStorage.getItem(SESSION_KEY);
+    if (!stored) return null;
+
     const session: AuthSession = JSON.parse(stored);
     const now = Date.now();
-    
-    // Check if 48 hours have passed
-    if (now > session.expiresAt || (now - session.loggedInAt) > SESSION_DURATION_MS) {
-      clearSession(); // Silently wipe expired session
+
+    // Verify 48-hour session window
+    if (!session || !session.user || now > session.expiresAt || (now - session.loggedInAt) > SESSION_DURATION_MS) {
+      clearSession(); // Silently purge expired session
       return null;
     }
     return session;
   } catch (e) {
-    console.error('Session parsing error:', e);
+    console.error('Session reading error:', e);
     return null;
   }
 }
@@ -108,16 +108,22 @@ export function saveSession(user: Profile): AuthSession {
     loggedInAt: now,
     expiresAt: now + SESSION_DURATION_MS
   };
-  
-  // Save securely to the device's persistent storage
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch (e) {
+    console.error('Failed to write session to localStorage:', e);
+  }
   return session;
 }
 
 export async function clearSession(): Promise<void> {
-  // Wipe from device storage and log out of Supabase
-  localStorage.removeItem(SESSION_KEY);
-  await supabase.auth.signOut();
+  try {
+    localStorage.removeItem(SESSION_KEY);
+    await supabase.auth.signOut();
+  } catch (e) {
+    console.error('Failed to clear session:', e);
+  }
 }
 
 // ==========================================
@@ -126,16 +132,14 @@ export async function clearSession(): Promise<void> {
 
 export async function loginUser(username: string, password: string): Promise<{ success: boolean; user?: Profile; error?: string }> {
   const cleanUsername = username.trim().toLowerCase();
-  const dummyEmail = `${cleanUsername}@polivector.com`; // Auto-generated for Supabase Auth
+  const dummyEmail = `${cleanUsername}@polivector.com`;
 
   try {
-    // 1. Authenticate via Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: dummyEmail,
       password: password,
     });
 
-    // Special handling for demo login if user hasn't been created yet
     if (authError && cleanUsername === 'polivector' && password === 'followup2026') {
       const res = await registerUser('polivector', '9171266305', 'followup2026');
       if (res.success && res.user) {
@@ -148,7 +152,6 @@ export async function loginUser(username: string, password: string): Promise<{ s
       return { success: false, error: 'Invalid username or password.' };
     }
 
-    // 2. Fetch the matched profile from the public table
     if (authData.user) {
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -182,7 +185,6 @@ export async function registerUser(username: string, mobileNumber: string, passw
   }
 
   try {
-    // 1. Create the secure user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: dummyEmail,
       password: password,
@@ -202,10 +204,8 @@ export async function registerUser(username: string, mobileNumber: string, passw
     }
 
     if (authData.user) {
-      // 2. Wait 500ms to allow the SQL trigger to execute and create the profile
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // 3. Fetch the newly triggered profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -226,10 +226,9 @@ export async function registerUser(username: string, mobileNumber: string, passw
 }
 
 export async function retrieveCredentials(username: string, mobileNumber: string): Promise<{ success: boolean; password?: string; error?: string }> {
-  // Passwords are now securely encrypted via Supabase Auth and cannot be revealed.
-  return { 
-    success: false, 
-    error: 'For security compliance, passwords are encrypted and cannot be revealed. Please create a new account or contact support.' 
+  return {
+    success: false,
+    error: 'For security compliance, passwords are encrypted. Please contact your system administrator to issue a secure password reset.'
   };
 }
 
@@ -291,7 +290,6 @@ export async function resetProfileData(userId: string): Promise<void> {
   }
 }
 
-// Helper to seed initial sample records for demo user in Supabase
 async function seedDemoData(userId: string) {
   try {
     const { data: existingFollowups } = await supabase.from('followups').select('id').eq('user_id', userId);
@@ -354,6 +352,24 @@ export async function addFollowup(followup: Omit<Followup, 'id' | 'created_at' |
   } catch (e) {
     console.error('Error adding followup:', e);
     return newFollowup;
+  }
+}
+
+export async function updateFollowup(id: string, updatedData: Partial<Followup>): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('followups')
+      .update(updatedData)
+      .eq('id', id);
+
+    if (error) {
+      console.error('Update followup error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('Error updating followup:', e);
+    return false;
   }
 }
 
@@ -496,23 +512,5 @@ export async function updateTodoOrder(todos: Todo[]): Promise<void> {
     }
   } catch (e) {
     console.error('Error updating todo order:', e);
-  }
-}
-
-export async function updateFollowup(id: string, updatedData: Partial<Followup>): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('followups')
-      .update(updatedData)
-      .eq('id', id);
-
-    if (error) {
-      console.error('Update followup error:', error.message);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    console.error('Error updating followup:', e);
-    return false;
   }
 }
